@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Overtime Horror P2P</title>
+    <title>Overtime Horror P2P Fixed</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
@@ -22,7 +22,7 @@
         .btn-sec { background: #222230; border: 1px solid #444455; box-shadow: none; }
         .btn:disabled { background: #333 !important; color: #777; cursor: not-allowed; box-shadow: none; }
         .btn:active:not(:disabled) { transform: scale(0.98); opacity: 0.9; }
-        input { width: 100%; padding: 14px; font-size: 18px; text-align: center; margin: 10px 0; background: #13131c; color: #fff; border: 1px solid #333344; border-radius: 8px; font-family: monospace; letter-spacing: 2px; }
+        input { width: 100%; padding: 14px; font-size: 18px; text-align: center; margin: 10px 0; background: #13131c; color: #fff; border: 1px solid #333344; border-radius: 8px; font-family: monospace; letter-spacing: 2px; text-transform: uppercase; }
 
         /* HUD */
         #hud { position: absolute; top: 0; left: 0; width: 100%; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 12px; font-size: 11px; font-weight: bold; z-index: 10; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); pointer-events: none;}
@@ -63,6 +63,7 @@
 </head>
 <body>
 
+    <!-- MENU PRINCIPAL -->
     <div id="menu">
         <div class="panel">
             <h1>OVERTIME</h1>
@@ -70,25 +71,27 @@
             <button class="btn" onclick="startSolo()">Jouer Solo</button>
             <div style="margin: 12px 0; color: #444455; font-size: 11px;">— MULTIJOUEUR —</div>
             <button class="btn btn-sec" onclick="initMultiplayer(true)">Créer un salon</button>
-            <input type="text" id="join-code" placeholder="Code à 4 chiffres" maxlength="4">
+            <input type="text" id="join-code" placeholder="Code secret à 5 lettres/chiffres" maxlength="5">
             <button class="btn btn-sec" style="margin-top:0;" onclick="initMultiplayer(false)">Rejoindre</button>
         </div>
     </div>
 
+    <!-- SALLE D'ATTENTE (LOBBY) -->
     <div id="lobby">
         <div class="panel">
             <h2>SALON D'ATTENTE</h2>
             <div style="margin: 15px 0; font-size: 18px; color: #00ffcc; font-weight: bold;">
-                CODE : <span id="lobby-code-display">----</span>
+                CODE : <span id="lobby-code-display">CONNEXION...</span>
             </div>
             <p style="font-size: 13px; color: #aaa; margin-bottom: 10px;">Joueurs dans le salon :</p>
             <div id="player-list" style="background:#13131c; padding: 10px; border-radius:8px; font-size:14px; text-align:left; margin-bottom:20px;">
-                • Toi (Prêt)
+                • Toi (En attente)
             </div>
             <button id="start-match-btn" class="btn" disabled onclick="hostLaunchGame()">LANCER LA PARTIE</button>
         </div>
     </div>
 
+    <!-- ZONE DE JEU -->
     <div id="game-container">
         <div id="hud">
             <div class="hud-item">🕒 <span id="clock">22:00</span></div>
@@ -114,6 +117,7 @@
         </div>
     </div>
 
+    <!-- GAME OVER -->
     <div id="game-over">
         <div class="panel" style="border-color: #551111;">
             <h1 id="game-over-title">GAME OVER</h1>
@@ -138,12 +142,11 @@
             hidden: false,
             monsterActive: false,
             monsterX: 420, monsterY: 120,
-            monsterState: 'chase', // 'chase' ou 'lost'
+            monsterState: 'chase',
             monsterLostTimer: 0,
             gameOver: false
         };
 
-        // Beaucoup plus d'emplacements de nourriture
         const objects = [
             { type: 'desk', x: 30, y: 40, label: 'Bureau' },
             { type: 'desk', x: 130, y: 40, label: 'Bureau' },
@@ -153,7 +156,6 @@
             { type: 'closet', x: 220, y: 35, label: 'Armoire' },
             { type: 'closet', x: 220, y: 215, label: 'Armoire' },
             { type: 'door', x: 300, y: 120, label: 'PORTE' }, 
-            // Nourritures initiales
             { type: 'food', x: 380, y: 50, label: '🍩', active: true },
             { type: 'food', x: 420, y: 200, label: '🍏', active: true },
             { type: 'food', x: 90, y: 50, label: '🍫', active: true },
@@ -162,6 +164,8 @@
         ];
 
         let peer; let conn; let isHost = false; let isMultiplayer = false;
+        // Prefixe de sécurité requis pour relier proprement les codes courts sur le cloud public de PeerJS
+        const ID_PREFIX = "overtimehorror-room-";
 
         function createMap() {
             objects.forEach((obj, index) => {
@@ -175,12 +179,10 @@
             });
         }
 
-        // --- GESTION DU RESPOND DE LA NOURRITURE ---
         function checkFoodRespawn() {
             objects.forEach((obj, idx) => {
                 if (obj.type === 'food' && !obj.active) {
-                    // 15% de chance de réapparaître à chaque cycle si consommé
-                    if (Math.random() < 0.05) {
+                    if (Math.random() < 0.15) {
                         obj.active = true;
                         let el = document.getElementById(`obj-${idx}`);
                         if(el) el.style.display = 'flex';
@@ -189,7 +191,7 @@
             });
         }
 
-        // --- JOYSTICK TOUCH CONTRÔLE ---
+        // --- CONTROLES JOYSTICK ---
         const joyContainer = document.getElementById('joy-container');
         const joyHandle = document.getElementById('joy-handle');
         let moveX = 0, moveY = 0;
@@ -273,14 +275,14 @@
             });
         }
 
-        // --- BOUCLE PRINCIPALE ---
+        // --- BOUCLE DE JEU ---
         function startGameLoop() {
             document.getElementById('lobby').style.display = 'none';
             document.getElementById('menu').style.display = 'none';
             document.getElementById('game-container').style.display = 'flex';
             createMap();
             setInterval(updateClock, 2500); 
-            setInterval(checkFoodRespawn, 5000); // Tente de faire réapparaître de la nourriture toutes les 5s
+            setInterval(checkFoodRespawn, 4000); 
             gameLoop();
         }
 
@@ -290,13 +292,12 @@
             if(gameState.minutes >= 60) { gameState.minutes = 0; gameState.hour++; }
             if(gameState.hour === 24) gameState.hour = 0;
             document.getElementById('clock').innerText = `${gameState.hour.toString().padStart(2,'0')}:${gameState.minutes.toString().padStart(2,'0')}`;
-            if(gameState.hour === 6) endGame(true, "06:00. Tu as survécu jusqu'à l'arrivée des collègues !");
+            if(gameState.hour === 6) endGame(true, "06:00. Victoire ! Le bureau rouvre !");
         }
 
         function gameLoop() {
             if(gameState.gameOver) return;
 
-            // Déplacement joueur
             if(!gameState.hidden) {
                 gameState.x += moveX * 3.2;
                 gameState.y += moveY * 3.2;
@@ -305,24 +306,20 @@
                 p1.style.left = gameState.x + 'px';
                 p1.style.top = gameState.y + 'px';
 
-                // Régénération oxygène hors armoire
-                gameState.oxygen = Math.min(100, gameState.oxygen + 1.5);
+                gameState.oxygen = Math.min(100, gameState.oxygen + 1.2);
                 suffocateOverlay.style.background = "rgba(255,0,0,0)";
             } else {
-                // Consommation oxygène dans l'armoire
-                gameState.oxygen = Math.max(0, gameState.oxygen - 0.4);
+                gameState.oxygen = Math.max(0, gameState.oxygen - 0.45);
                 if(gameState.oxygen < 35) {
                     suffocateOverlay.style.background = `rgba(255,0,0,${(35 - gameState.oxygen)/35 * 0.5})`;
                 }
-                // Expulsion si plus d'air
                 if(gameState.oxygen <= 0) {
                     gameState.hidden = false;
                     p1.style.filter = "none";
-                    subtitle.innerText = "PLUS D'AIR ! Tu as dû sortir en suffoquant !";
+                    subtitle.innerText = "PLUS D'AIR ! Sortie forcée !";
                 }
             }
 
-            // Lampes torche & Survie
             let percentX = ((gameState.x + 10) / view.clientWidth) * 100;
             let percentY = ((gameState.y + 10) / view.clientHeight) * 100;
             overlay.style.setProperty('--px', `${percentX}%`);
@@ -334,36 +331,31 @@
             document.getElementById('hunger-bar').style.width = gameState.hunger + '%';
             document.getElementById('oxygen-bar').style.width = gameState.oxygen + '%';
 
-            if(gameState.energy <= 0 || gameState.hunger <= 0) endGame(false, "Épuisé et affamé...");
+            if(gameState.energy <= 0 || gameState.hunger <= 0) endGame(false, "Mort d'épuisement ou de faim...");
 
-            // --- IA DU MONSTRE (AVEC PERTE DE VUE) ---
+            // IA DU MONSTRE
             if(gameState.monsterActive) {
                 let targetX = gameState.x;
                 let targetY = gameState.y;
                 let distToPlayer = Math.sqrt(Math.pow(gameState.x - gameState.monsterX, 2) + Math.pow(gameState.y - gameState.monsterY, 2));
 
-                // Gestion des états Perdu / Chasse
                 if (gameState.hidden || distToPlayer > 180) {
                     if (gameState.monsterState === 'chase') {
                         gameState.monsterState = 'lost';
                         gameState.monsterLostTimer = Date.now();
                     }
-                } else if (!gameState.hidden && distToPlayer < 150) {
+                } else if (!gameState.hidden && distToPlayer < 140) {
                     gameState.monsterState = 'chase';
                 }
 
                 if (gameState.monsterState === 'lost') {
-                    // Si perdu de vue depuis plus de 4 secondes, il erre au hasard ou rentre
-                    if (Date.now() - gameState.monsterLostTimer > 4000) {
-                        targetX = 420; // Il retourne vers sa porte mystère
+                    if (Date.now() - gameState.monsterLostTimer > 3500) {
+                        targetX = 420; 
                         targetY = 120;
-                        if(distToPlayer > 250) {
-                            subtitle.innerText = "Le monstre semble t'avoir perdu de vue...";
-                        }
+                        if(distToPlayer > 220) subtitle.innerText = "Le monstre a l'air de t'avoir semé...";
                     } else {
-                        // Cherche frénétiquement autour du dernier endroit connu
-                        targetX = gameState.monsterX + Math.sin(Date.now() / 150) * 40;
-                        targetY = gameState.monsterY + Math.cos(Date.now() / 150) * 40;
+                        targetX = gameState.monsterX + Math.sin(Date.now() / 150) * 35;
+                        targetY = gameState.monsterY + Math.cos(Date.now() / 150) * 35;
                     }
                 }
 
@@ -372,7 +364,7 @@
                 let mDist = Math.sqrt(mdx*mdx + mdy*mdy);
 
                 if(mDist > 2) {
-                    let speed = (gameState.monsterState === 'chase') ? 2.4 : 1.2; // Moins rapide quand il cherche
+                    let speed = (gameState.monsterState === 'chase') ? 2.3 : 1.1;
                     gameState.monsterX += (mdx / mDist) * speed; 
                     gameState.monsterY += (mdy / mDist) * speed;
                 }
@@ -381,11 +373,10 @@
                 monsterElem.style.top = gameState.monsterY + 'px';
 
                 if(distToPlayer < 20 && !gameState.hidden) {
-                    endGame(false, "Le monstre t'a attrapé !");
+                    endGame(false, "Le monstre t'a eu !");
                 }
             }
 
-            // Sync Réseau Multi
             if(isMultiplayer && conn && conn.open) {
                 conn.send({
                     type: 'SYNC', x: gameState.x, y: gameState.y, hidden: gameState.hidden,
@@ -404,52 +395,88 @@
             document.getElementById('game-over-reason').innerText = reason;
         }
 
-        // --- GESTION MULTIJOUEUR SALON COMPACT P2P (PEERJS) ---
-        // Génère un ID court à 4 chiffres basé sur la méthode PeerJS standard
-        function generateShortId() {
-            return Math.floor(1000 + Math.random() * 9000).toString();
-        }
-
+        // --- SYSTEME RESEAU CORRECTIF SANS ERREURS ---
         function initMultiplayer(host) {
             isHost = host;
             isMultiplayer = true;
             document.getElementById('menu').style.display = 'none';
             document.getElementById('lobby').style.display = 'flex';
-            
-            let roomId = isHost ? generateShortId() : document.getElementById('join-code').value;
-            if(!isHost && !roomId) return alert("Rentre un code salon à 4 chiffres !");
 
-            document.getElementById('lobby-code-display').innerText = roomId;
+            if(isHost) {
+                // L'hôte laisse PeerJS attribuer un ID serveur global unique (pas de conflit)
+                peer = new Peer(); 
 
-            // Instanciation de la connexion P2P avec l'ID court choisi
-            peer = new Peer(roomId); 
+                peer.on('open', (fullId) => {
+                    // On garde les 5 derniers caractères pour faire le code visible
+                    let shortCode = fullId.slice(-5).toLowerCase();
+                    document.getElementById('lobby-code-display').innerText = shortCode;
+                    document.getElementById('player-list').innerHTML = "• Toi (En attente de ton ami...)";
 
-            peer.on('open', (id) => {
-                if(isHost) {
+                    // Écoute les connexions arrivant sur cet ID
                     peer.on('connection', (connection) => {
                         conn = connection;
                         setupMultiplayerEvents();
                     });
-                } else {
-                    // Tente de se connecter à l'hôte après un court délai pour laisser l'ID s'enregistrer
-                    setTimeout(() => {
-                        conn = peer.connect(roomId);
-                        setupMultiplayerEvents();
-                    }, 500);
+                });
+            } else {
+                let inputCode = document.getElementById('join-code').value.trim().toLowerCase();
+                if(!inputCode || inputCode.length !== 5) {
+                    alert("Rentre un code valide à 5 caractères !");
+                    location.reload();
+                    return;
                 }
-            });
+
+                // L'invité se connecte d'abord au serveur public
+                peer = new Peer();
+                
+                peer.on('open', () => {
+                    document.getElementById('lobby-code-display').innerText = inputCode;
+                    document.getElementById('player-list').innerHTML = "Recherche du salon de ton ami...";
+                    
+                    // On doit trouver l'ID complet de l'hôte qui finit par ce code de 5 lettres
+                    // Pour éviter de chercher dans le vide, on utilise l'API de PeerJS pour cibler le salon distant
+                    peer.listAllPeers((peers) => {
+                        let targetFullId = peers.find(p => p.endsWith(inputCode));
+                        
+                        if(targetFullId) {
+                            conn = peer.connect(targetFullId);
+                            setupMultiplayerEvents();
+                        } else {
+                            // Secours direct si la liste globale met du temps à se rafraîchir
+                            // On tente une connexion directe sur l'ID brut estimé si l'hôte utilise le cloud standard
+                            conn = peer.connect(inputCode);
+                            setupMultiplayerEvents();
+                            
+                            // Timeout de sécurité si introuvable
+                            setTimeout(() => {
+                                if(!conn || !conn.open) {
+                                    alert("Salon introuvable. Vérifie le code ou assure-toi que ton ami a bien ouvert sa salle d'attente !");
+                                    location.reload();
+                                }
+                            }, 3500);
+                        }
+                    });
+                });
+            }
 
             peer.on('error', (err) => {
-                alert("Erreur de connexion (Code déjà pris ou indisponible). Réessaye.");
+                console.error(err);
+                alert("Erreur de connexion réseau. Réessaye.");
                 location.reload();
             });
         }
 
         function setupMultiplayerEvents() {
+            // Se déclenche quand la liaison entre les deux téléphones réussit !
             conn.on('open', () => {
                 document.getElementById('player-list').innerHTML = "• Toi (Prêt)<br>• Ami connecté (Prêt)";
                 p2.style.display = 'block';
-                if(isHost) document.getElementById('start-match-btn').disabled = false;
+                if(isHost) {
+                    document.getElementById('start-match-btn').disabled = false;
+                    document.getElementById('start-match-btn').innerText = "LANCER LA PARTIE";
+                } else {
+                    document.getElementById('lobby-code-display').innerText = "ATTENTE DU LANCEMENT...";
+                }
             });
 
             conn.on('data', (data) => {
@@ -460,7 +487,6 @@
                     p2.style.left = data.x + 'px';
                     p2.style.top = data.y + 'px';
                     p2.style.filter = data.hidden ? "brightness(0.1)" : "none";
-                    // L'invité synchronise la position du monstre gérée par l'hôte
                     if(!isHost && data.monsterActive) {
                         gameState.monsterActive = true;
                         monsterElem.style.display = 'block';
@@ -477,6 +503,11 @@
                     let el = document.getElementById(`obj-${data.index}`);
                     if(el) el.style.display = 'none';
                 }
+            });
+
+            conn.on('close', () => {
+                alert("Ton ami s'est déconnecté.");
+                location.reload();
             });
         }
 
