@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Overtime Horror P2P Stable</title>
+    <title>Overtime Horror P2P UltraStable</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
@@ -39,9 +39,11 @@
         #flashlight-overlay { position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none; z-index: 5; background: radial-gradient(circle 110px at var(--px, 50%) var(--py, 50%), transparent 100%, rgba(3,3,5,0.95) 100%); transition: background 0.1s ease; }
         #suffocate-overlay { position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none; z-index: 6; background: rgba(255,0,0,0); transition: background 0.3s ease; }
 
-        /* Entités */
+        /* Entités (Ajout Joueurs 3 et 4) */
         .player { width: 20px; height: 20px; background: #3388ff; border: 2px solid #fff; border-radius: 50%; position: absolute; z-index: 3; box-shadow: 0 0 10px #3388ff; }
-        .player.peer { background: #a833ff; box-shadow: 0 0 10px #a833ff; }
+        .player.peer2 { background: #a833ff; box-shadow: 0 0 10px #a833ff; }
+        .player.peer3 { background: #22ff22; box-shadow: 0 0 10px #22ff22; }
+        .player.peer4 { background: #ffaa00; box-shadow: 0 0 10px #ffaa00; }
         .monster { width: 26px; height: 26px; background: #ff1133; border: 2px solid #ff9999; border-radius: 50%; position: absolute; display: none; box-shadow: 0 0 25px #ff1133; z-index: 3;}
         
         /* Décors */
@@ -63,32 +65,35 @@
 </head>
 <body>
 
+    <!-- MENU PRINCIPAL -->
     <div id="menu">
         <div class="panel">
             <h1>OVERTIME</h1>
-            <p class="desc">Restez éveillé, trouvez à manger et survivez à la bête du bureau jusqu'à 06:00.</p>
+            <p class="desc">Restez éveillé, trouvez à manger et survivez jusqu'à 06:00 (Jusqu'à 4 Joueurs).</p>
             <button class="btn" onclick="startSolo()">Jouer Solo</button>
-            <div style="margin: 12px 0; color: #444455; font-size: 11px;">— MULTIJOUEUR —</div>
+            <div style="margin: 12px 0; color: #444455; font-size: 11px;">— MULTIJOUEUR (MAX 4) —</div>
             <button class="btn btn-sec" onclick="initMultiplayer(true)">Créer un salon</button>
             <input type="text" id="join-code" placeholder="Code secret à 5 lettres" maxlength="5">
             <button class="btn btn-sec" style="margin-top:0;" onclick="initMultiplayer(false)">Rejoindre</button>
         </div>
     </div>
 
+    <!-- SALLE D'ATTENTE (LOBBY) -->
     <div id="lobby">
         <div class="panel">
             <h2>SALON D'ATTENTE</h2>
             <div style="margin: 15px 0; font-size: 18px; color: #00ffcc; font-weight: bold;">
-                CODE : <span id="lobby-code-display">GÉNÉRATION...</span>
+                CODE : <span id="lobby-code-display">CONNEXION...</span>
             </div>
-            <p style="font-size: 13px; color: #aaa; margin-bottom: 10px;">Joueurs dans le salon :</p>
+            <p style="font-size: 13px; color: #aaa; margin-bottom: 10px;">Joueurs connectés :</p>
             <div id="player-list" style="background:#13131c; padding: 10px; border-radius:8px; font-size:14px; text-align:left; margin-bottom:20px;">
-                • Toi (En attente...)
+                • Toi (Hôte)
             </div>
             <button id="start-match-btn" class="btn" disabled onclick="hostLaunchGame()">LANCER LA PARTIE</button>
         </div>
     </div>
 
+    <!-- ZONE DE JEU -->
     <div id="game-container">
         <div id="hud">
             <div class="hud-item">🕒 <span id="clock">22:00</span></div>
@@ -96,13 +101,15 @@
             <div class="hud-item">🍔 <div class="bar-container"><div id="hunger-bar" class="bar"></div></div></div>
             <div class="hud-item">🫁 <div class="bar-container"><div id="oxygen-bar" class="bar"></div></div></div>
         </div>
-        <div id="subtitle">Heures sup'... fatigué... je devrais aller à la machine à café à gauche.</div>
+        <div id="subtitle">Heures sup'... restons groupés pour survivre.</div>
         
         <div id="view">
             <div id="flashlight-overlay"></div>
             <div id="suffocate-overlay"></div>
             <div id="player1" class="player"></div>
-            <div id="player2" class="player" style="display:none;"></div>
+            <div id="player2" class="player peer2" style="display:none;"></div>
+            <div id="player3" class="player peer3" style="display:none;"></div>
+            <div id="player4" class="player peer4" style="display:none;"></div>
             <div id="the-monster" class="monster"></div>
         </div>
 
@@ -114,6 +121,7 @@
         </div>
     </div>
 
+    <!-- GAME OVER -->
     <div id="game-over">
         <div class="panel" style="border-color: #551111;">
             <h1 id="game-over-title">GAME OVER</h1>
@@ -127,12 +135,20 @@
         const overlay = document.getElementById('flashlight-overlay');
         const suffocateOverlay = document.getElementById('suffocate-overlay');
         const p1 = document.getElementById('player1');
-        const p2 = document.getElementById('player2');
+        
+        // Dictionnaire pour gérer dynamiquement les visuels des autres joueurs
+        const remotePlayersElements = {
+            2: document.getElementById('player2'),
+            3: document.getElementById('player3'),
+            4: document.getElementById('player4')
+        };
+        
         const monsterElem = document.getElementById('the-monster');
         const subtitle = document.getElementById('subtitle');
         
         let gameState = {
-            x: 40, y: 120, peerX: 0, peerY: 0,
+            id: null, // Sera défini lors de l'attribution des places (1 à 4)
+            x: 40, y: 120,
             energy: 100, hunger: 100, oxygen: 100,
             hour: 22, minutes: 0,
             hidden: false,
@@ -142,6 +158,9 @@
             monsterLostTimer: 0,
             gameOver: false
         };
+
+        // État local de la position de TOUS les joueurs connectés
+        let playersWorldState = {};
 
         const objects = [
             { type: 'desk', x: 30, y: 40, label: 'Bureau' },
@@ -159,9 +178,19 @@
             { type: 'food', x: 360, y: 230, label: '🥪', active: true }
         ];
 
-        let peer; let conn; let isHost = false; let isMultiplayer = false;
-        // Prefix unique fixe pour solidariser les salons sur le serveur global
-        const ROOM_PREFIX = "othr-";
+        let peer; 
+        let connections = []; // Tableau de toutes les connexions actives (Hôte <-> Clients)
+        let isHost = false; 
+        let isMultiplayer = false;
+        const ROOM_PREFIX = "othr4p-";
+
+        const peerConfig = {
+            host: '0.peerjs.com',
+            port: 443,
+            path: '/',
+            secure: true,
+            debug: 1
+        };
 
         function createMap() {
             objects.forEach((obj, index) => {
@@ -187,7 +216,7 @@
             });
         }
 
-        // --- CONTROLES JOYSTICK ---
+        // --- JOYSTICK ---
         const joyContainer = document.getElementById('joy-container');
         const joyHandle = document.getElementById('joy-handle');
         let moveX = 0, moveY = 0;
@@ -227,7 +256,6 @@
             moveX = 0; moveY = 0;
         });
 
-        // --- INTERACTION ---
         function triggerAction() {
             objects.forEach((obj, idx) => {
                 if (obj.type === 'food' && !obj.active) return;
@@ -243,35 +271,24 @@
                     else if(obj.type === 'door' && !gameState.monsterActive) {
                         gameState.monsterActive = true;
                         monsterElem.style.display = 'block';
-                        subtitle.innerText = "C'est quoi cette pièce ?... OH NON ! COURS, CACHE-TOI !";
-                        if(isMultiplayer && conn) conn.send({type: 'MONSTER_TRIGGER'});
+                        subtitle.innerText = "OH NON ! COURS, CACHE-TOI !";
+                        broadcast({type: 'MONSTER_TRIGGER'});
                     }
                     else if(obj.type === 'closet') {
-                        if (gameState.oxygen < 30 && !gameState.hidden) {
-                            subtitle.innerText = "Je manque d'air, je ne peux pas retourner dedans tout de suite !";
-                            return;
-                        }
+                        if (gameState.oxygen < 30 && !gameState.hidden) return;
                         gameState.hidden = !gameState.hidden;
-                        if(gameState.hidden) {
-                            subtitle.innerText = "Caché. Ne fais pas de bruit...";
-                            p1.style.filter = "brightness(0.2)";
-                        } else {
-                            subtitle.innerText = "Je sors de la cachette.";
-                            p1.style.filter = "none";
-                        }
+                        p1.style.filter = gameState.hidden ? "brightness(0.2)" : "none";
                     }
                     else if(obj.type === 'food' && obj.active) {
                         gameState.hunger = Math.min(100, gameState.hunger + 35);
-                        subtitle.innerText = "Trouvé à manger !";
                         obj.active = false;
                         document.getElementById(`obj-${idx}`).style.display = 'none';
-                        if(isMultiplayer && conn) conn.send({type: 'FOOD_EATEN', index: idx});
+                        broadcast({type: 'FOOD_EATEN', index: idx});
                     }
                 }
             });
         }
 
-        // --- BOUCLE DE JEU ---
         function startGameLoop() {
             document.getElementById('lobby').style.display = 'none';
             document.getElementById('menu').style.display = 'none';
@@ -288,7 +305,7 @@
             if(gameState.minutes >= 60) { gameState.minutes = 0; gameState.hour++; }
             if(gameState.hour === 24) gameState.hour = 0;
             document.getElementById('clock').innerText = `${gameState.hour.toString().padStart(2,'0')}:${gameState.minutes.toString().padStart(2,'0')}`;
-            if(gameState.hour === 6) endGame(true, "06:00. Victoire ! Le bureau rouvre !");
+            if(gameState.hour === 6) endGame(true, "06:00. Victoire collective !");
         }
 
         function gameLoop() {
@@ -301,7 +318,6 @@
                 gameState.y = Math.max(5, Math.min(view.clientHeight - 25, gameState.y));
                 p1.style.left = gameState.x + 'px';
                 p1.style.top = gameState.y + 'px';
-
                 gameState.oxygen = Math.min(100, gameState.oxygen + 1.2);
                 suffocateOverlay.style.background = "rgba(255,0,0,0)";
             } else {
@@ -312,7 +328,6 @@
                 if(gameState.oxygen <= 0) {
                     gameState.hidden = false;
                     p1.style.filter = "none";
-                    subtitle.innerText = "PLUS D'AIR ! Sortie forcée !";
                 }
             }
 
@@ -321,66 +336,98 @@
             overlay.style.setProperty('--px', `${percentX}%`);
             overlay.style.setProperty('--py', `${percentY}%`);
 
-            gameState.energy = Math.max(0, gameState.energy - 0.04);
-            gameState.hunger = Math.max(0, gameState.hunger - 0.05);
+            // AJUSTEMENT : Vitesse de descente divisée par 2 pour la faim et l'énergie
+            gameState.energy = Math.max(0, gameState.energy - 0.02);
+            gameState.hunger = Math.max(0, gameState.hunger - 0.025);
             document.getElementById('energy-bar').style.width = gameState.energy + '%';
             document.getElementById('hunger-bar').style.width = gameState.hunger + '%';
             document.getElementById('oxygen-bar').style.width = gameState.oxygen + '%';
 
-            if(gameState.energy <= 0 || gameState.hunger <= 0) endGame(false, "Mort d'épuisement ou de faim...");
+            if(gameState.energy <= 0 || gameState.hunger <= 0) endGame(false, "Mort d'épuisement...");
 
-            // IA DU MONSTRE
+            // IA ET DÉPLACEMENTS DU MONSTRE
             if(gameState.monsterActive) {
-                let targetX = gameState.x;
+                let targetX = gameState.x; 
                 let targetY = gameState.y;
-                let distToPlayer = Math.sqrt(Math.pow(gameState.x - gameState.monsterX, 2) + Math.pow(gameState.y - gameState.monsterY, 2));
+                
+                // En multijoueur, le monstre cherche et cible le joueur non caché le plus proche
+                if(isMultiplayer) {
+                    let closestDist = Math.sqrt(Math.pow(gameState.x - gameState.monsterX, 2) + Math.pow(gameState.y - gameState.monsterY, 2));
+                    if(gameState.hidden) closestDist = 99999;
+                    
+                    Object.keys(playersWorldState).forEach(pId => {
+                        let p = playersWorldState[pId];
+                        if(!p.hidden) {
+                            let d = Math.sqrt(Math.pow(p.x - gameState.monsterX, 2) + Math.pow(p.y - gameState.monsterY, 2));
+                            if(d < closestDist) {
+                                closestDist = d;
+                                targetX = p.x;
+                                targetY = p.y;
+                            }
+                        }
+                    });
+                }
 
-                if (gameState.hidden || distToPlayer > 180) {
+                let distToTarget = Math.sqrt(Math.pow(targetX - gameState.monsterX, 2) + Math.pow(targetY - gameState.monsterY, 2));
+
+                if (gameState.hidden || distToTarget > 180) {
                     if (gameState.monsterState === 'chase') {
                         gameState.monsterState = 'lost';
                         gameState.monsterLostTimer = Date.now();
                     }
-                } else if (!gameState.hidden && distToPlayer < 140) {
+                } else if (!gameState.hidden && distToTarget < 140) {
                     gameState.monsterState = 'chase';
                 }
 
                 if (gameState.monsterState === 'lost') {
-                    if (Date.now() - gameState.monsterLostTimer > 3500) {
-                        targetX = 420; 
-                        targetY = 120;
-                        if(distToPlayer > 220) subtitle.innerText = "Le monstre a l'air de t'avoir semé...";
-                    } else {
-                        targetX = gameState.monsterX + Math.sin(Date.now() / 150) * 35;
-                        targetY = gameState.monsterY + Math.cos(Date.now() / 150) * 35;
-                    }
+                    if (Date.now() - gameState.monsterLostTimer > 3500) { targetX = 420; targetY = 120; }
+                    else { targetX = gameState.monsterX + Math.sin(Date.now() / 150) * 35; targetY = gameState.monsterY + Math.cos(Date.now() / 150) * 35; }
                 }
 
-                let mdx = targetX - gameState.monsterX;
-                let mdy = targetY - gameState.monsterY;
+                let mdx = targetX - gameState.monsterX; let mdy = targetY - gameState.monsterY;
                 let mDist = Math.sqrt(mdx*mdx + mdy*mdy);
-
                 if(mDist > 2) {
-                    let speed = (gameState.monsterState === 'chase') ? 2.3 : 1.1;
-                    gameState.monsterX += (mdx / mDist) * speed; 
-                    gameState.monsterY += (mdy / mDist) * speed;
+                    // AJUSTEMENT : Vitesses du monstre ralenties pour le rendre gérable
+                    let speed = (gameState.monsterState === 'chase') ? 1.5 : 0.8;
+                    gameState.monsterX += (mdx / mDist) * speed; gameState.monsterY += (mdy / mDist) * speed;
                 }
+                monsterElem.style.left = gameState.monsterX + 'px'; monsterElem.style.top = gameState.monsterY + 'px';
 
-                monsterElem.style.left = gameState.monsterX + 'px';
-                monsterElem.style.top = gameState.monsterY + 'px';
-
-                if(distToPlayer < 20 && !gameState.hidden) {
-                    endGame(false, "Le monstre t'a eu !");
-                }
+                if(distToTarget < 20 && !gameState.hidden) endGame(false, "Le monstre vous a dévoré !");
             }
 
-            if(isMultiplayer && conn && conn.open) {
-                conn.send({
-                    type: 'SYNC', x: gameState.x, y: gameState.y, hidden: gameState.hidden,
-                    monsterX: gameState.monsterX, monsterY: gameState.monsterY, monsterActive: gameState.monsterActive
+            // Envoi des paquets réseaux de synchronisation
+            if(isMultiplayer) {
+                broadcast({
+                    type: 'SYNC', 
+                    pId: gameState.id,
+                    x: gameState.x, 
+                    y: gameState.y, 
+                    hidden: gameState.hidden,
+                    monsterX: gameState.monsterX, 
+                    monsterY: gameState.monsterY, 
+                    monsterActive: gameState.monsterActive
                 });
             }
-
             requestAnimationFrame(gameLoop);
+        }
+
+        function updateLobbyUI() {
+            let html = `• Toi (Joueur ${gameState.id})<br>`;
+            connections.forEach((c, idx) => {
+                html += `• Allié Connecté (Joueur ${c.assignedId})<br>`;
+            });
+            document.getElementById('player-list').innerHTML = html;
+            
+            if(isHost) {
+                document.getElementById('start-match-btn').disabled = (connections.length === 0);
+            }
+        }
+
+        function broadcast(data) {
+            connections.forEach(c => {
+                if(c.open) c.send(data);
+            });
         }
 
         function endGame(victory, reason) {
@@ -391,16 +438,14 @@
             document.getElementById('game-over-reason').innerText = reason;
         }
 
-        // --- GESTION RESEAU COMPLÈTEMENT SÉCURISÉE ---
         function generateRandomCode() {
             const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
             let code = "";
-            for(let i=0; i<5; i++) {
-                code += chars.charAt(Math.floor(Math.random() * chars.length));
-            }
+            for(let i=0; i<5; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
             return code;
         }
 
+        // --- GESTION RESEAU JUSQU'À 4 JOUEURS ---
         function initMultiplayer(host) {
             isHost = host;
             isMultiplayer = true;
@@ -408,18 +453,29 @@
             document.getElementById('lobby').style.display = 'flex';
 
             if(isHost) {
-                // L'hôte crée un code unique aléatoire
+                gameState.id = 1; // L'hôte est toujours joueur 1
                 let secretCode = generateRandomCode();
                 document.getElementById('lobby-code-display').innerText = secretCode.toUpperCase();
-                document.getElementById('player-list').innerHTML = "• Toi (En attente de ton ami...)";
+                updateLobbyUI();
 
-                // Enregistrement forcé de l'ID précis pour éviter le lag réseau
-                peer = new Peer(ROOM_PREFIX + secretCode); 
+                peer = new Peer(ROOM_PREFIX + secretCode, peerConfig); 
 
                 peer.on('open', () => {
                     peer.on('connection', (connection) => {
-                        conn = connection;
-                        setupMultiplayerEvents();
+                        if(connections.length >= 3) { // Max 4 joueurs (Hôte + 3 clients)
+                            connection.on('open', () => {
+                                connection.send({type: 'FULL'});
+                                setTimeout(() => connection.close(), 500);
+                            });
+                            return;
+                        }
+                        
+                        // Attribue un ID libre au nouveau joueur rejoignant
+                        let nextId = connections.length + 2; 
+                        connection.assignedId = nextId;
+                        
+                        connections.push(connection);
+                        setupMultiplayerEvents(connection);
                     });
                 });
             } else {
@@ -431,85 +487,109 @@
                 }
 
                 document.getElementById('lobby-code-display').innerText = inputCode.toUpperCase();
-                document.getElementById('player-list').innerHTML = "Connexion directe au salon de ton ami...";
+                document.getElementById('player-list').innerHTML = "Connexion sécurisée au groupe en cours...";
 
-                // L'invité se branche directement sur l'ID de l'hôte sans lister le réseau
-                peer = new Peer();
+                peer = new Peer(peerConfig);
                 
                 peer.on('open', () => {
-                    conn = peer.connect(ROOM_PREFIX + inputCode);
-                    setupMultiplayerEvents();
+                    let connection = peer.connect(ROOM_PREFIX + inputCode);
+                    setupMultiplayerEvents(connection);
                     
-                    // Sécurité en cas de mauvais code
                     setTimeout(() => {
-                        if(!conn || !conn.open) {
-                            alert("Impossible de se connecter. Vérifie le code ou que l'hôte est bien dans le salon d'attente.");
+                        if(!connection.open) {
+                            alert("Impossible de joindre le groupe. Salon plein ou code inexistant.");
                             location.reload();
                         }
-                    }, 4000);
+                    }, 6000);
                 });
             }
 
             peer.on('error', (err) => {
-                alert("Erreur réseau. Ce code est peut-être déjà utilisé, recrée un salon.");
+                alert("Erreur réseau. Relancez la room.");
                 location.reload();
             });
         }
 
-        function setupMultiplayerEvents() {
-            conn.on('open', () => {
-                document.getElementById('player-list').innerHTML = "• Toi (Prêt)<br>• Ami connecté (Prêt)";
-                p2.style.display = 'block';
+        function setupMultiplayerEvents(c) {
+            c.on('open', () => {
                 if(isHost) {
-                    document.getElementById('start-match-btn').disabled = false;
-                    document.getElementById('start-match-btn').innerText = "LANCER LA PARTIE";
+                    // L'hôte valide la connexion et donne son ID au client
+                    c.send({type: 'ASSIGN_ID', id: c.assignedId});
+                    updateLobbyUI();
                 } else {
-                    document.getElementById('lobby-code-display').innerText = "ATTENTED DU RECOUVREMENT...";
+                    connections.push(c); // Le client stocke son unique canal vers l'hôte
                 }
             });
 
-            conn.on('data', (data) => {
-                if(data.type === 'LAUNCH') {
+            c.on('data', (data) => {
+                if(data.type === 'ASSIGN_ID') {
+                    gameState.id = data.id;
+                    updateLobbyUI();
+                    document.getElementById('lobby-code-display').innerText = "ATTENTE DU LANCEMENT HÔTE...";
+                }
+                else if(data.type === 'FULL') {
+                    alert("Ce salon contient déjà 4 joueurs !");
+                    location.reload();
+                }
+                else if(data.type === 'LAUNCH') {
                     startGameLoop();
                 }
                 else if(data.type === 'SYNC') {
-                    p2.style.left = data.x + 'px';
-                    p2.style.top = data.y + 'px';
-                    p2.style.filter = data.hidden ? "brightness(0.1)" : "none";
+                    // Sauvegarde la position reçue du joueur distant
+                    if(data.pId !== gameState.id) {
+                        playersWorldState[data.pId] = { x: data.x, y: data.y, hidden: data.hidden };
+                        
+                        // Met à jour l'élément HTML correspondant sur l'écran
+                        let el = remotePlayersElements[data.pId];
+                        if(el) {
+                            el.style.display = 'block';
+                            el.style.left = data.x + 'px';
+                            el.style.top = data.y + 'px';
+                            el.style.filter = data.hidden ? "brightness(0.1)" : "none";
+                        }
+                    }
+
+                    // Synchronisation du monstre calculé par l'Hôte vers les clients
                     if(!isHost && data.monsterActive) {
-                        gameState.monsterActive = true;
+                        gameState.monsterActive = true; 
                         monsterElem.style.display = 'block';
-                        gameState.monsterX = data.monsterX;
+                        gameState.monsterX = data.monsterX; 
                         gameState.monsterY = data.monsterY;
                     }
+
+                    // L'hôte sert de relais : il renvoie les positions reçues aux autres clients connectés
+                    if(isHost) {
+                        connections.forEach(conn => {
+                            if(conn !== c && conn.open) conn.send(data);
+                        });
+                    }
                 }
-                else if(data.type === 'MONSTER_TRIGGER') {
-                    gameState.monsterActive = true;
+                else if(data.type === 'MONSTER_TRIGGER') { 
+                    gameState.monsterActive = true; 
                     monsterElem.style.display = 'block';
+                    if(isHost) broadcast(data);
                 }
                 else if(data.type === 'FOOD_EATEN') {
                     objects[data.index].active = false;
-                    let el = document.getElementById(`obj-${data.index}`);
+                    let el = document.getElementById(`obj-${data.index}`); 
                     if(el) el.style.display = 'none';
+                    if(isHost) broadcast(data);
                 }
             });
 
-            conn.on('close', () => {
-                alert("Déconnexion du partenaire.");
-                location.reload();
+            c.on('close', () => { 
+                alert("Un membre de l'équipe s'est déconnecté."); 
+                location.reload(); 
             });
         }
 
         function hostLaunchGame() {
-            if(isHost && conn && conn.open) {
-                conn.send({type: 'LAUNCH'});
+            if(isHost) {
+                broadcast({type: 'LAUNCH'});
                 startGameLoop();
             }
         }
-
-        function startSolo() {
-            startGameLoop();
-        }
+        function startSolo() { gameState.id = 1; startGameLoop(); }
     </script>
 </body>
 </html>
