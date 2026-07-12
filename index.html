@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Heures Sup' Infernales</title>
+    <!-- On utilise PeerJS pour le réseau P2P sans configurer de serveur -->
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #050505; font-family: 'Courier New', Courier, monospace; color: #fff; overflow: hidden; }
+        
+        #menu, #game-container, #game-over { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; position: absolute; top:0; left:0; }
+        #game-container { display: none; background: #111; }
+        #game-over { display: none; background: #000; z-index: 10; color: red; }
+
+        h1 { text-shadow: 0 0 10px red; text-align: center; font-size: 24px; }
+        .btn { background: #222; color: #fff; border: 2px solid #555; padding: 15px 30px; margin: 10px; font-size: 16px; cursor: pointer; border-radius: 5px; }
+        .btn:active { background: #444; }
+        input { padding: 10px; font-size: 16px; text-align: center; margin: 10px; background: #222; color: #fff; border: 1px solid #555; }
+
+        /* Interface de jeu */
+        #hud { position: absolute; top: 10px; left: 10px; width: calc(100% - 20px); display: flex; justify-content: space-between; font-size: 14px; z-index: 5; pointer-events: none;}
+        .bar-container { width: 120px; background: #333; height: 15px; border: 1px solid #555; display: inline-block; vertical-align: middle;}
+        .bar { height: 100%; width: 100%; }
+        #energy-bar { background: #00ffcc; }
+        #hunger-bar { background: #ff9900; }
+
+        /* Rendu du Bureau (Vue simplifiée 2D Top-Down / Survival) */
+        #view { width: 100%; flex: 1; position: relative; background: #1a1a24; overflow: hidden; border-bottom: 2px solid #333; }
+        
+        /* Entités */
+        .player { width: 24px; height: 24px; background: #3388ff; border-radius: 50%; position: absolute; transition: transform 0.1s; z-index: 3;}
+        .player.peer { background: #9933ff; }
+        .monster { width: 28px; height: 28px; background: #ff1133; border-radius: 50%; position: absolute; display: none; box-shadow: 0 0 15px red; z-index: 3;}
+        
+        /* Décors */
+        .object { position: absolute; display: flex; justify-content: center; align-items: center; font-size: 12px; font-weight: bold; text-align: center;}
+        .desk { background: #664422; border: 2px solid #442200; width: 60px; height: 40px; }
+        .closet { background: #444; border: 2px solid #222; width: 40px; height: 40px; color: #0f0;}
+        .door { background: #882222; width: 40px; height: 10px; color: #fff; font-size: 9px; }
+        .coffee-machine { background: #333; border: 2px solid #555; width: 35px; height: 35px; color: #00ffcc;}
+        .food { background: #00ff00; width: 15px; height: 15px; border-radius: 30%; color: #000; font-size: 10px;}
+
+        /* Controles Mobiles */
+        #controls { height: 160px; width: 100%; background: #0a0a0a; display: flex; justify-content: space-around; align-items: center; padding: 10px; }
+        .joystick-zone { width: 100px; height: 100px; background: #222; border-radius: 50%; position: relative; }
+        .joystick-stick { width: 40px; height: 40px; background: #555; border-radius: 50%; position: absolute; top: 30px; left: 30px; }
+        #action-btn { width: 80px; height: 80px; background: #aa2222; border-radius: 50%; border: 3px solid #ff5555; color: white; font-weight: bold; font-size: 16px;}
+        
+        #subtitle { position: absolute; bottom: 180px; width: 100%; text-align: center; background: rgba(0,0,0,0.7); padding: 5px; font-size: 14px; color: #ffcc00; z-index: 4;}
+    </style>
+</head>
+<body>
+
+    <!-- MENU PRINCIPAL -->
+    <div id="menu">
+        <h1>HEURES SUP' INFERNALES</h1>
+        <p style="text-align:center; padding:0 20px; color:#aaa; font-size:12px;">Évitez le monstre, trouvez du café et à manger. Survivez jusqu'à 06:00.</p>
+        <button class="btn" onclick="startSolo()">Jouer Solo</button>
+        <hr style="width:80%; border-color:#333;">
+        <button class="btn" onclick="initMultiplayer(true)">Créer un salon (P2P)</button>
+        <div id="room-code-display" style="margin:5px; color:#00ffcc;"></div>
+        <input type="text" id="join-code" placeholder="Code du salon à rejoindre">
+        <button class="btn" onclick="initMultiplayer(false)">Rejoindre</button>
+    </div>
+
+    <!-- ZONE DE JEU -->
+    <div id="game-container">
+        <div id="hud">
+            <div>Heure: <span id="clock">22:00</span></div>
+            <div>Café/Énergie: <div class="bar-container"><div id="energy-bar" class="bar"></div></div></div>
+            <div>Faim: <div class="bar-container"><div id="hunger-bar" class="bar"></div></div></div>
+        </div>
+        <div id="subtitle">Il est tard... Je devrais aller chercher un café à la machine.</div>
+        <div id="view">
+            <!-- Les éléments du bureau seront générés ici en JS -->
+            <div id="player1" class="player"></div>
+            <div id="player2" class="player" style="display:none;"></div>
+            <div id="the-monster" class="monster"></div>
+        </div>
+        <div id="controls">
+            <div class="joystick-zone" id="joy-zone">
+                <div class="joystick-stick" id="joy-stick"></div>
+            </div>
+            <button id="action-btn" onclick="triggerAction()">ACTION</button>
+        </div>
+    </div>
+
+    <!-- GAME OVER / VICTOIRE -->
+    <div id="game-over">
+        <h1 id="game-over-title">GAME OVER</h1>
+        <p id="game-over-reason"></p>
+        <button class="btn" onclick="location.reload()">Recommencer</button>
+    </div>
+
+    <script>
+        // Configuration de base du jeu
+        const view = document.getElementById('view');
+        const p1 = document.getElementById('player1');
+        const p2 = document.getElementById('player2');
+        const monsterElem = document.getElementById('the-monster');
+        const subtitle = document.getElementById('subtitle');
+        
+        let gameState = {
+            x: 50, y: 150,
+            peerX: 0, peerY: 0,
+            energy: 100, hunger: 100,
+            hour: 22, minutes: 0,
+            hidden: false,
+            monsterActive: false,
+            monsterX: 400, monsterY: 250,
+            gameOver: false
+        };
+
+        // Cartographie simplifiée du bureau (positions fixes)
+        const objects = [
+            { type: 'desk', x: 40, y: 60, label: 'Bureau' },
+            { type: 'desk', x: 140, y: 60, label: 'Bureau' },
+            { type: 'coffee-machine', x: 20, y: 240, label: 'Café' },
+            { type: 'closet', x: 120, y: 230, label: 'Armoire' },
+            { type: 'closet', x: 260, y: 40, label: 'Armoire' },
+            { type: 'door', x: 320, y: 120, label: '???' }, // La fameuse porte à droite
+            // Zone secrète derrière la porte (débloquée après)
+            { type: 'food', x: 450, y: 80, label: '🍩' },
+            { type: 'food', x: 500, y: 220, label: '🍎' }
+        ];
+
+        let objectsElem = [];
+        let peer;
+        let conn;
+        let isHost = false;
+        let isMultiplayer = false;
+
+        // Génération visuelle de la carte
+        function createMap() {
+            objects.forEach((obj, index) => {
+                let div = document.createElement('div');
+                div.className = `object ${obj.type}`;
+                div.style.left = obj.x + 'px';
+                div.style.top = obj.y + 'px';
+                div.innerText = obj.label;
+                div.id = `obj-${index}`;
+                view.appendChild(div);
+                objectsElem.push({data: obj, el: div});
+            });
+        }
+
+        // --- CONTROLES JOYSTICK MOBILE ---
+        let moveX = 0, moveY = 0;
+        const joyZone = document.getElementById('joy-zone');
+        const joyStick = document.getElementById('joy-stick');
+        let joyRect = joyZone.getBoundingClientRect();
+
+        joyZone.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            let touch = e.touches[0];
+            let rx = touch.clientX - (joyRect.left + 50);
+            let ry = touch.clientY - (joyRect.top + 50);
+            let dist = Math.sqrt(rx*rx + ry*ry);
+            if(dist > 30) { rx = (rx/dist)*30; ry = (ry/dist)*30; }
+            joyStick.style.transform = `translate(${rx}px, ${ry}px)`;
+            moveX = rx / 30;
+            moveY = ry / 30;
+        });
+
+        joyZone.addEventListener('touchend', () => {
+            joyStick.style.transform = 'translate(0px, 0px)';
+            moveX = 0; moveY = 0;
+        });
+
+        // Version PC (ZQSDF / Flèches) pour tester facilement
+        window.addEventListener('keydown', (e) => {
+            if(e.key === 'ArrowUp' || e.key === 'z') moveY = -1;
+            if(e.key === 'ArrowDown' || e.key === 's') moveY = 1;
+            if(e.key === 'ArrowLeft' || e.key === 'q') moveX = -1;
+            if(e.key === 'ArrowRight' || e.key === 'd') moveX = 1;
+        });
+        window.addEventListener('keyup', () => { moveX = 0; moveY = 0; });
+
+        // --- FONCTIONS DU JEU ---
+        function startSolo() {
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('game-container').style.display = 'flex';
+            createMap();
+            gameLoop();
+            setInterval(updateClock, 2000); // Le temps passe vite
+        }
+
+        function updateClock() {
+            if(gameState.gameOver) return;
+            gameState.minutes += 10;
+            if(gameState.minutes >= 60) { gameState.minutes = 0; gameState.hour++; }
+            if(gameState.hour === 24) gameState.hour = 0;
+            
+            document.getElementById('clock').innerText = 
+                `${gameState.hour.toString().padStart(2,'0')}:${gameState.minutes.toString().padStart(2,'0')}`;
+            
+            // Condition de Victoire : 6h du matin
+            if(gameState.hour === 6) {
+                endGame(true, "Tu as survécu jusqu'au matin ! Le bureau rouvre enfin.");
+            }
+        }
+
+        function triggerAction() {
+            // Check si proche d'un objet actif
+            objects.forEach((obj, idx) => {
+                let dx = Math.abs((gameState.x + 12) - (obj.x + 15));
+                let dy = Math.abs((gameState.y + 12) - (obj.y + 15));
+                
+                if(dx < 40 && dy < 40) {
+                    if(obj.type === 'coffee-machine') {
+                        gameState.energy = Math.min(100, gameState.energy + 40);
+                        subtitle.innerText = "Ah, un bon café chaud ! Ça réveille.";
+                    }
+                    else if(obj.type === 'door' && !gameState.monsterActive) {
+                        gameState.monsterActive = true;
+                        monsterElem.style.display = 'block';
+                        subtitle.innerText = "Mais c'est quoi cette pièce cachée... Oh non, QU'EST CE QUE C'EST QUE ÇA ? FUIT !";
+                    }
+                    else if(obj.type === 'closet') {
+                        gameState.hidden = !gameState.hidden;
+                        if(gameState.hidden) {
+                            subtitle.innerText = "Caché dans l'armoire... Ne fais pas de bruit.";
+                            p1.style.opacity = "0.3";
+                        } else {
+                            subtitle.innerText = "Je sors de ma cachette.";
+                            p1.style.opacity = "1";
+                        }
+                    }
+                    else if(obj.type === 'food') {
+                        gameState.hunger = Math.min(100, gameState.hunger + 35);
+                        subtitle.innerText = "Miam, de la nourriture ! Ça va m'aider à tenir.";
+                        document.getElementById(`obj-${idx}`).style.display = 'none'; // Consommé
+                        obj.x = -1000; // Désactive la collision
+                    }
+                }
+            });
+        }
+
+        // Boucle principale
+        function gameLoop() {
+            if(gameState.gameOver) return;
+
+            // Déplacement joueur si non caché
+            if(!gameState.hidden) {
+                gameState.x += moveX * 4;
+                gameState.y += moveY * 4;
+                
+                // Limites de l'écran
+                gameState.x = Math.max(0, Math.min(view.clientWidth - 24, gameState.x));
+                gameState.y = Math.max(0, Math.min(view.clientHeight - 24, gameState.y));
+                
+                p1.style.left = gameState.x + 'px';
+                p1.style.top = gameState.y + 'px';
+            }
+
+            // Consommation vitale
+            gameState.energy = Math.max(0, gameState.energy - 0.05);
+            gameState.hunger = Math.max(0, gameState.hunger - 0.07);
+
+            document.getElementById('energy-bar').style.width = gameState.energy + '%';
+            document.getElementById('hunger-bar').style.width = gameState.hunger + '%';
+
+            if(gameState.energy <= 0 || gameState.hunger <= 0) {
+                endGame(false, "Tu es mort d'épuisement ou de faim...");
+            }
+
+            // Comportement de l'I.A. du Monstre
+            if(gameState.monsterActive) {
+                let targetX = gameState.x;
+                let targetString = "le joueur";
+                
+                // En multi, le monstre peut cibler le joueur le plus proche non caché
+                if(gameState.hidden) {
+                    targetX = gameState.monsterX + (Math.random() - 0.5) * 50; // Erre sans but
+                }
+
+                let mdx = targetX - gameState.monsterX;
+                let mdy = gameState.y - gameState.monsterY;
+                let dist = Math.sqrt(mdx*mdx + mdy*mdy);
+
+                if(dist > 5) {
+                    gameState.monsterX += (mdx / dist) * 2.5; // Vitesse du monstre
+                    gameState.monsterY += (mdy / dist) * 2.5;
+                }
+
+                monsterElem.style.left = gameState.monsterX + 'px';
+                monsterElem.style.top = gameState.monsterY + 'px';
+
+                // Collision monstre / joueur
+                if(dist < 25 && !gameState.hidden) {
+                    endGame(false, "Le monstre t'a attrapé dans les couloirs obscurs !");
+                }
+            }
+
+            // Sync Réseau Multi (P2P)
+            if(isMultiplayer && conn && conn.open) {
+                conn.send({x: gameState.x, y: gameState.y, hidden: gameState.hidden, monsterActive: gameState.monsterActive, mx: gameState.monsterX, my: gameState.monsterY});
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function endGame(victory, reason) {
+            gameState.gameOver = true;
+            document.getElementById('game-over').style.display = 'flex';
+            document.getElementById('game-over-title').innerText = victory ? "VICTOIRE !" : "GAME OVER";
+            document.getElementById('game-over-reason').innerText = reason;
+        }
+
+        // --- GESTION MULTIJOUEUR EN P2P ---
+        function initMultiplayer(host) {
+            isHost = host;
+            isMultiplayer = true;
+            peer = new Peer(); // Utilise les serveurs d'échange gratuits de PeerJS
+
+            peer.on('open', (id) => {
+                if(isHost) {
+                    document.getElementById('room-code-display').innerText = "Code de ton salon : " + id;
+                    // Attente d'un joueur
+                    peer.on('connection', (connection) => {
+                        conn = connection;
+                        setupMultiplayerEvents();
+                    });
+                } else {
+                    let connectId = document.getElementById('join-code').value;
+                    if(!connectId) return alert("Rentre le code de ton pote !");
+                    conn = peer.connect(connectId);
+                    setupMultiplayerEvents();
+                }
+            });
+        }
+
+        function setupMultiplayerEvents() {
+            conn.on('open', () => {
+                p2.style.display = 'block';
+                startSolo(); // Lance la partie une fois connecté
+            });
+
+            conn.on('data', (data) => {
+                // Réception des coordonnées du pote en P2P
+                p2.style.left = data.x + 'px';
+                p2.style.top = data.y + 'px';
+                p2.style.opacity = data.hidden ? "0.2" : "1";
+                
+                // Synchronisation du monstre si l'autre joueur l'a déclenché
+                if(data.monsterActive && !gameState.monsterActive) {
+                    gameState.monsterActive = true;
+                    monsterElem.style.display = 'block';
+                }
+            });
+        }
+    </script>
+</body>
+</html>
