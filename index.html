@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Overtime Horror P2P Fixed</title>
+    <title>Overtime Horror P2P Stable</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
@@ -63,7 +63,6 @@
 </head>
 <body>
 
-    <!-- MENU PRINCIPAL -->
     <div id="menu">
         <div class="panel">
             <h1>OVERTIME</h1>
@@ -71,27 +70,25 @@
             <button class="btn" onclick="startSolo()">Jouer Solo</button>
             <div style="margin: 12px 0; color: #444455; font-size: 11px;">— MULTIJOUEUR —</div>
             <button class="btn btn-sec" onclick="initMultiplayer(true)">Créer un salon</button>
-            <input type="text" id="join-code" placeholder="Code secret à 5 lettres/chiffres" maxlength="5">
+            <input type="text" id="join-code" placeholder="Code secret à 5 lettres" maxlength="5">
             <button class="btn btn-sec" style="margin-top:0;" onclick="initMultiplayer(false)">Rejoindre</button>
         </div>
     </div>
 
-    <!-- SALLE D'ATTENTE (LOBBY) -->
     <div id="lobby">
         <div class="panel">
             <h2>SALON D'ATTENTE</h2>
             <div style="margin: 15px 0; font-size: 18px; color: #00ffcc; font-weight: bold;">
-                CODE : <span id="lobby-code-display">CONNEXION...</span>
+                CODE : <span id="lobby-code-display">GÉNÉRATION...</span>
             </div>
             <p style="font-size: 13px; color: #aaa; margin-bottom: 10px;">Joueurs dans le salon :</p>
             <div id="player-list" style="background:#13131c; padding: 10px; border-radius:8px; font-size:14px; text-align:left; margin-bottom:20px;">
-                • Toi (En attente)
+                • Toi (En attente...)
             </div>
             <button id="start-match-btn" class="btn" disabled onclick="hostLaunchGame()">LANCER LA PARTIE</button>
         </div>
     </div>
 
-    <!-- ZONE DE JEU -->
     <div id="game-container">
         <div id="hud">
             <div class="hud-item">🕒 <span id="clock">22:00</span></div>
@@ -117,7 +114,6 @@
         </div>
     </div>
 
-    <!-- GAME OVER -->
     <div id="game-over">
         <div class="panel" style="border-color: #551111;">
             <h1 id="game-over-title">GAME OVER</h1>
@@ -164,8 +160,8 @@
         ];
 
         let peer; let conn; let isHost = false; let isMultiplayer = false;
-        // Prefixe de sécurité requis pour relier proprement les codes courts sur le cloud public de PeerJS
-        const ID_PREFIX = "overtimehorror-room-";
+        // Prefix unique fixe pour solidariser les salons sur le serveur global
+        const ROOM_PREFIX = "othr-";
 
         function createMap() {
             objects.forEach((obj, index) => {
@@ -182,7 +178,7 @@
         function checkFoodRespawn() {
             objects.forEach((obj, idx) => {
                 if (obj.type === 'food' && !obj.active) {
-                    if (Math.random() < 0.15) {
+                    if (Math.random() < 0.20) {
                         obj.active = true;
                         let el = document.getElementById(`obj-${idx}`);
                         if(el) el.style.display = 'flex';
@@ -395,7 +391,16 @@
             document.getElementById('game-over-reason').innerText = reason;
         }
 
-        // --- SYSTEME RESEAU CORRECTIF SANS ERREURS ---
+        // --- GESTION RESEAU COMPLÈTEMENT SÉCURISÉE ---
+        function generateRandomCode() {
+            const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+            let code = "";
+            for(let i=0; i<5; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return code;
+        }
+
         function initMultiplayer(host) {
             isHost = host;
             isMultiplayer = true;
@@ -403,16 +408,15 @@
             document.getElementById('lobby').style.display = 'flex';
 
             if(isHost) {
-                // L'hôte laisse PeerJS attribuer un ID serveur global unique (pas de conflit)
-                peer = new Peer(); 
+                // L'hôte crée un code unique aléatoire
+                let secretCode = generateRandomCode();
+                document.getElementById('lobby-code-display').innerText = secretCode.toUpperCase();
+                document.getElementById('player-list').innerHTML = "• Toi (En attente de ton ami...)";
 
-                peer.on('open', (fullId) => {
-                    // On garde les 5 derniers caractères pour faire le code visible
-                    let shortCode = fullId.slice(-5).toLowerCase();
-                    document.getElementById('lobby-code-display').innerText = shortCode;
-                    document.getElementById('player-list').innerHTML = "• Toi (En attente de ton ami...)";
+                // Enregistrement forcé de l'ID précis pour éviter le lag réseau
+                peer = new Peer(ROOM_PREFIX + secretCode); 
 
-                    // Écoute les connexions arrivant sur cet ID
+                peer.on('open', () => {
                     peer.on('connection', (connection) => {
                         conn = connection;
                         setupMultiplayerEvents();
@@ -421,53 +425,38 @@
             } else {
                 let inputCode = document.getElementById('join-code').value.trim().toLowerCase();
                 if(!inputCode || inputCode.length !== 5) {
-                    alert("Rentre un code valide à 5 caractères !");
+                    alert("Rentre un code valide à 5 lettres !");
                     location.reload();
                     return;
                 }
 
-                // L'invité se connecte d'abord au serveur public
+                document.getElementById('lobby-code-display').innerText = inputCode.toUpperCase();
+                document.getElementById('player-list').innerHTML = "Connexion directe au salon de ton ami...";
+
+                // L'invité se branche directement sur l'ID de l'hôte sans lister le réseau
                 peer = new Peer();
                 
                 peer.on('open', () => {
-                    document.getElementById('lobby-code-display').innerText = inputCode;
-                    document.getElementById('player-list').innerHTML = "Recherche du salon de ton ami...";
+                    conn = peer.connect(ROOM_PREFIX + inputCode);
+                    setupMultiplayerEvents();
                     
-                    // On doit trouver l'ID complet de l'hôte qui finit par ce code de 5 lettres
-                    // Pour éviter de chercher dans le vide, on utilise l'API de PeerJS pour cibler le salon distant
-                    peer.listAllPeers((peers) => {
-                        let targetFullId = peers.find(p => p.endsWith(inputCode));
-                        
-                        if(targetFullId) {
-                            conn = peer.connect(targetFullId);
-                            setupMultiplayerEvents();
-                        } else {
-                            // Secours direct si la liste globale met du temps à se rafraîchir
-                            // On tente une connexion directe sur l'ID brut estimé si l'hôte utilise le cloud standard
-                            conn = peer.connect(inputCode);
-                            setupMultiplayerEvents();
-                            
-                            // Timeout de sécurité si introuvable
-                            setTimeout(() => {
-                                if(!conn || !conn.open) {
-                                    alert("Salon introuvable. Vérifie le code ou assure-toi que ton ami a bien ouvert sa salle d'attente !");
-                                    location.reload();
-                                }
-                            }, 3500);
+                    // Sécurité en cas de mauvais code
+                    setTimeout(() => {
+                        if(!conn || !conn.open) {
+                            alert("Impossible de se connecter. Vérifie le code ou que l'hôte est bien dans le salon d'attente.");
+                            location.reload();
                         }
-                    });
+                    }, 4000);
                 });
             }
 
             peer.on('error', (err) => {
-                console.error(err);
-                alert("Erreur de connexion réseau. Réessaye.");
+                alert("Erreur réseau. Ce code est peut-être déjà utilisé, recrée un salon.");
                 location.reload();
             });
         }
 
         function setupMultiplayerEvents() {
-            // Se déclenche quand la liaison entre les deux téléphones réussit !
             conn.on('open', () => {
                 document.getElementById('player-list').innerHTML = "• Toi (Prêt)<br>• Ami connecté (Prêt)";
                 p2.style.display = 'block';
@@ -475,7 +464,7 @@
                     document.getElementById('start-match-btn').disabled = false;
                     document.getElementById('start-match-btn').innerText = "LANCER LA PARTIE";
                 } else {
-                    document.getElementById('lobby-code-display').innerText = "ATTENTE DU LANCEMENT...";
+                    document.getElementById('lobby-code-display').innerText = "ATTENTED DU RECOUVREMENT...";
                 }
             });
 
@@ -506,7 +495,7 @@
             });
 
             conn.on('close', () => {
-                alert("Ton ami s'est déconnecté.");
+                alert("Déconnexion du partenaire.");
                 location.reload();
             });
         }
