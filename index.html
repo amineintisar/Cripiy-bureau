@@ -3,136 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Heures Sup' Infernales</title>
-    <!-- On utilise PeerJS pour le réseau P2P sans configurer de serveur -->
+    <title>Overtime: Le Monstre du Bureau</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
-        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #050505; font-family: 'Courier New', Courier, monospace; color: #fff; overflow: hidden; }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; background: #0b0b10; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #eee; overflow: hidden; }
         
         #menu, #game-container, #game-over { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; position: absolute; top:0; left:0; }
-        #game-container { display: none; background: #111; }
-        #game-over { display: none; background: #000; z-index: 10; color: red; }
+        #game-container { display: none; background: #08080c; flex-direction: column; }
+        #game-over { display: none; background: rgba(0,0,0,0.95); z-index: 100; color: #ff3333; text-align: center; }
 
-        h1 { text-shadow: 0 0 10px red; text-align: center; font-size: 24px; }
-        .btn { background: #222; color: #fff; border: 2px solid #555; padding: 15px 30px; margin: 10px; font-size: 16px; cursor: pointer; border-radius: 5px; }
-        .btn:active { background: #444; }
-        input { padding: 10px; font-size: 16px; text-align: center; margin: 10px; background: #222; color: #fff; border: 1px solid #555; }
-
-        /* Interface de jeu */
-        #hud { position: absolute; top: 10px; left: 10px; width: calc(100% - 20px); display: flex; justify-content: space-between; font-size: 14px; z-index: 5; pointer-events: none;}
-        .bar-container { width: 120px; background: #333; height: 15px; border: 1px solid #555; display: inline-block; vertical-align: middle;}
-        .bar { height: 100%; width: 100%; }
-        #energy-bar { background: #00ffcc; }
-        #hunger-bar { background: #ff9900; }
-
-        /* Rendu du Bureau (Vue simplifiée 2D Top-Down / Survival) */
-        #view { width: 100%; flex: 1; position: relative; background: #1a1a24; overflow: hidden; border-bottom: 2px solid #333; }
+        /* Style Menu Moderne & Sombre */
+        .panel { background: rgba(20, 20, 30, 0.8); border: 1px solid #333344; border-radius: 12px; padding: 25px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h1 { font-size: 26px; letter-spacing: 2px; color: #ff3b3b; margin-bottom: 10px; text-shadow: 0 0 10px rgba(255,59,59,0.3); }
+        p.desc { font-size: 13px; color: #8a8a9a; margin-bottom: 20px; line-height: 1.4; }
         
-        /* Entités */
-        .player { width: 24px; height: 24px; background: #3388ff; border-radius: 50%; position: absolute; transition: transform 0.1s; z-index: 3;}
-        .player.peer { background: #9933ff; }
-        .monster { width: 28px; height: 28px; background: #ff1133; border-radius: 50%; position: absolute; display: none; box-shadow: 0 0 15px red; z-index: 3;}
-        
-        /* Décors */
-        .object { position: absolute; display: flex; justify-content: center; align-items: center; font-size: 12px; font-weight: bold; text-align: center;}
-        .desk { background: #664422; border: 2px solid #442200; width: 60px; height: 40px; }
-        .closet { background: #444; border: 2px solid #222; width: 40px; height: 40px; color: #0f0;}
-        .door { background: #882222; width: 40px; height: 10px; color: #fff; font-size: 9px; }
-        .coffee-machine { background: #333; border: 2px solid #555; width: 35px; height: 35px; color: #00ffcc;}
-        .food { background: #00ff00; width: 15px; height: 15px; border-radius: 30%; color: #000; font-size: 10px;}
+        .btn { background: #ff3b3b; color: #fff; border: none; padding: 14px 24px; margin: 8px 0; font-size: 15px; font-weight: bold; cursor: pointer; border-radius: 8px; width: 100%; transition: all 0.2s; box-shadow: 0 4px 12px rgba(255,59,59,0.2); }
+        .btn-sec { background: #222230; border: 1px solid #444455; box-shadow: none; }
+        .btn:active { transform: scale(0.98); opacity: 0.9; }
+        input { width: 100%; padding: 12px; font-size: 15px; text-align: center; margin: 10px 0; background: #13131c; color: #fff; border: 1px solid #333344; border-radius: 8px; }
 
-        /* Controles Mobiles */
-        #controls { height: 160px; width: 100%; background: #0a0a0a; display: flex; justify-content: space-around; align-items: center; padding: 10px; }
-        .joystick-zone { width: 100px; height: 100px; background: #222; border-radius: 50%; position: relative; }
-        .joystick-stick { width: 40px; height: 40px; background: #555; border-radius: 50%; position: absolute; top: 30px; left: 30px; }
-        #action-btn { width: 80px; height: 80px; background: #aa2222; border-radius: 50%; border: 3px solid #ff5555; color: white; font-weight: bold; font-size: 16px;}
+        /* HUD Jeu */
+        #hud { position: absolute; top: 0; left: 0; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 15px; font-size: 13px; font-weight: bold; z-index: 10; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); pointer-events: none;}
+        .hud-item { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.4); padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); }
+        .bar-container { width: 70px; background: #222; height: 8px; border-radius: 4px; overflow: hidden; display: inline-block; }
+        .bar { height: 100%; width: 100%; transition: width 0.2s ease; }
+        #energy-bar { background: #00ffcc; box-shadow: 0 0 8px #00ffcc; }
+        #hunger-bar { background: #ff9900; box-shadow: 0 0 8px #ff9900; }
+        #clock { color: #ffcc00; font-size: 15px; font-family: monospace; }
+
+        /* Fenêtre de jeu (Le Bureau) */
+        #view { width: 100%; flex: 1; position: relative; background: #121218; overflow: hidden; }
         
-        #subtitle { position: absolute; bottom: 180px; width: 100%; text-align: center; background: rgba(0,0,0,0.7); padding: 5px; font-size: 14px; color: #ffcc00; z-index: 4;}
+        /* Effet Lampe Torche / Ambiance Sombre */
+        #flashlight-overlay { position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none; z-index: 5; background: radial-gradient(circle 120px at var(--px, 50%) var(--py, 50%), transparent 100%, rgba(0,0,0,0.92) 100%); }
+
+        /* Acteurs */
+        .player { width: 22px; height: 22px; background: #3388ff; border: 2px solid #fff; border-radius: 50%; position: absolute; z-index: 3; box-shadow: 0 0 10px #3388ff; }
+        .player.peer { background: #a833ff; box-shadow: 0 0 10px #a833ff; }
+        .monster { width: 26px; height: 26px; background: #ff1133; border: 2px solid #ff9999; border-radius: 50%; position: absolute; display: none; box-shadow: 0 0 25px #ff1133; z-index: 3;}
+        
+        /* Décors & Objets */
+        .object { position: absolute; display: flex; justify-content: center; align-items: center; font-size: 10px; font-weight: bold; border-radius: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+        .desk { background: #4a2e1b; border: 2px solid #2d1b10; width: 50px; height: 35px; color: #a57555; }
+        .closet { background: #2f353b; border: 2px solid #1e2226; width: 40px; height: 40px; color: #52ff52; border-top: 4px solid #3f4750; }
+        .door { background: #6b1d1d; border: 2px solid #421111; width: 45px; height: 12px; color: #ff9999; font-size: 8px; }
+        .coffee-machine { background: #222; border: 2px solid #00ffcc; width: 32px; height: 32px; color: #00ffcc; box-shadow: 0 0 8px rgba(0,255,204,0.3); }
+        .food { background: #224411; border: 1px solid #55ff55; width: 18px; height: 18px; border-radius: 50%; color: #fff; font-size: 11px; box-shadow: 0 0 8px rgba(85,255,85,0.4); }
+
+        /* Zone de contrôle Mobile Refaite */
+        #controls { height: 180px; width: 100%; background: #07070a; border-top: 1px solid #1c1c24; display: flex; justify-content: space-around; align-items: center; padding: 10px; position: relative; z-index: 20; }
+        
+        /* VRAI JOYSTICK FLUIDE */
+        .joystick-container { width: 120px; height: 120px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.1); border-radius: 50%; display: flex; justify-content: center; align-items: center; position: relative; touch-action: none; }
+        .joystick-handle { width: 50px; height: 50px; background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255,255,255,0.6); border-radius: 50%; position: absolute; box-shadow: 0 4px 10px rgba(0,0,0,0.5); pointer-events: none; transition: background 0.2s; }
+        .joystick-container:active .joystick-handle { background: rgba(255, 255, 255, 0.4); }
+
+        #action-btn { width: 90px; height: 90px; background: linear-gradient(135deg, #cc1111, #880000); border: 2px solid #ff4444; border-radius: 50%; color: white; font-weight: bold; font-size: 15px; letter-spacing: 1px; box-shadow: 0 6px 15px rgba(204,17,17,0.4); cursor: pointer; }
+        #action-btn:active { transform: scale(0.95); background: #880000; }
+        
+        #subtitle { position: absolute; bottom: 195px; width: 90%; left: 5%; text-align: center; background: rgba(5,5,10,0.85); border: 1px solid #222233; border-radius: 6px; padding: 8px; font-size: 13px; color: #ffcc00; z-index: 10; line-height: 1.3;}
     </style>
 </head>
 <body>
 
     <!-- MENU PRINCIPAL -->
     <div id="menu">
-        <h1>HEURES SUP' INFERNALES</h1>
-        <p style="text-align:center; padding:0 20px; color:#aaa; font-size:12px;">Évitez le monstre, trouvez du café et à manger. Survivez jusqu'à 06:00.</p>
-        <button class="btn" onclick="startSolo()">Jouer Solo</button>
-        <hr style="width:80%; border-color:#333;">
-        <button class="btn" onclick="initMultiplayer(true)">Créer un salon (P2P)</button>
-        <div id="room-code-display" style="margin:5px; color:#00ffcc;"></div>
-        <input type="text" id="join-code" placeholder="Code du salon à rejoindre">
-        <button class="btn" onclick="initMultiplayer(false)">Rejoindre</button>
+        <div class="panel">
+            <h1>OVERTIME</h1>
+            <p class="desc">Fatigué par vos heures sup, vous cherchez un café... mais une étrange porte vient d'apparaître sur votre droite.</p>
+            <button class="btn" onclick="startSolo()">Jouer Solo</button>
+            <div style="margin: 15px 0; color: #444455; font-size: 12px;">— MULTIJOUEUR P2P —</div>
+            <button class="btn btn-sec" onclick="initMultiplayer(true)">Créer un salon</button>
+            <div id="room-code-display" style="margin: 5px; font-size: 12px; color: #00ffcc; font-family: monospace;"></div>
+            <input type="text" id="join-code" placeholder="Coller le code du salon">
+            <button class="btn btn-sec" style="margin-top:0;" onclick="initMultiplayer(false)">Rejoindre le salon</button>
+        </div>
     </div>
 
     <!-- ZONE DE JEU -->
     <div id="game-container">
         <div id="hud">
-            <div>Heure: <span id="clock">22:00</span></div>
-            <div>Café/Énergie: <div class="bar-container"><div id="energy-bar" class="bar"></div></div></div>
-            <div>Faim: <div class="bar-container"><div id="hunger-bar" class="bar"></div></div></div>
+            <div class="hud-item">🕒 <span id="clock">22:00</span></div>
+            <div class="hud-item">⚡ <div class="bar-container"><div id="energy-bar" class="bar"></div></div></div>
+            <div class="hud-item">🍔 <div class="bar-container"><div id="hunger-bar" class="bar"></div></div></div>
         </div>
-        <div id="subtitle">Il est tard... Je devrais aller chercher un café à la machine.</div>
+        <div id="subtitle">Je tombe de fatigue... Je devrais aller chercher un café au fond du couloir.</div>
+        
         <div id="view">
-            <!-- Les éléments du bureau seront générés ici en JS -->
+            <div id="flashlight-overlay"></div>
             <div id="player1" class="player"></div>
             <div id="player2" class="player" style="display:none;"></div>
             <div id="the-monster" class="monster"></div>
         </div>
+
         <div id="controls">
-            <div class="joystick-zone" id="joy-zone">
-                <div class="joystick-stick" id="joy-stick"></div>
+            <!-- VRAI JOYSTICK TACTILE FIXÉ -->
+            <div class="joystick-container" id="joy-container">
+                <div class="joystick-handle" id="joy-handle"></div>
             </div>
-            <button id="action-btn" onclick="triggerAction()">ACTION</button>
+            <button id="action-btn" onclick="triggerAction()">INTERAGIR</button>
         </div>
     </div>
 
     <!-- GAME OVER / VICTOIRE -->
     <div id="game-over">
-        <h1 id="game-over-title">GAME OVER</h1>
-        <p id="game-over-reason"></p>
-        <button class="btn" onclick="location.reload()">Recommencer</button>
+        <div class="panel" style="border-color: #551111;">
+            <h1 id="game-over-title" style="font-size: 32px;">GAME OVER</h1>
+            <p id="game-over-reason" style="margin: 15px 0; font-size: 14px; color: #bbb;"></p>
+            <button class="btn" onclick="location.reload()">Retour au Menu</button>
+        </div>
     </div>
 
     <script>
-        // Configuration de base du jeu
         const view = document.getElementById('view');
+        const overlay = document.getElementById('flashlight-overlay');
         const p1 = document.getElementById('player1');
         const p2 = document.getElementById('player2');
         const monsterElem = document.getElementById('the-monster');
         const subtitle = document.getElementById('subtitle');
         
         let gameState = {
-            x: 50, y: 150,
+            x: 40, y: 120,
             peerX: 0, peerY: 0,
             energy: 100, hunger: 100,
             hour: 22, minutes: 0,
             hidden: false,
             monsterActive: false,
-            monsterX: 400, monsterY: 250,
+            monsterX: 420, monsterY: 120,
             gameOver: false
         };
 
-        // Cartographie simplifiée du bureau (positions fixes)
+        // Layout du bureau ajusté et plus propre
         const objects = [
-            { type: 'desk', x: 40, y: 60, label: 'Bureau' },
-            { type: 'desk', x: 140, y: 60, label: 'Bureau' },
-            { type: 'coffee-machine', x: 20, y: 240, label: 'Café' },
-            { type: 'closet', x: 120, y: 230, label: 'Armoire' },
-            { type: 'closet', x: 260, y: 40, label: 'Armoire' },
-            { type: 'door', x: 320, y: 120, label: '???' }, // La fameuse porte à droite
-            // Zone secrète derrière la porte (débloquée après)
-            { type: 'food', x: 450, y: 80, label: '🍩' },
-            { type: 'food', x: 500, y: 220, label: '🍎' }
+            { type: 'desk', x: 30, y: 40, label: 'Bureau' },
+            { type: 'desk', x: 130, y: 40, label: 'Bureau' },
+            { type: 'desk', x: 30, y: 220, label: 'Bureau' },
+            { type: 'desk', x: 130, y: 220, label: 'Bureau' },
+            { type: 'coffee-machine', x: 15, y: 140, label: '☕' },
+            { type: 'closet', x: 220, y: 35, label: 'Armoire' },
+            { type: 'closet', x: 220, y: 215, label: 'Armoire' },
+            { type: 'door', x: 300, y: 130, label: 'PORTE' }, 
+            // Zone secrète du monstre (à droite)
+            { type: 'food', x: 390, y: 50, label: '🍩' },
+            { type: 'food', x: 410, y: 210, label: '🍏' }
         ];
 
         let objectsElem = [];
-        let peer;
-        let conn;
-        let isHost = false;
-        let isMultiplayer = false;
+        let peer; let conn; let isHost = false; let isMultiplayer = false;
 
-        // Génération visuelle de la carte
         function createMap() {
             objects.forEach((obj, index) => {
                 let div = document.createElement('div');
@@ -146,30 +165,53 @@
             });
         }
 
-        // --- CONTROLES JOYSTICK MOBILE ---
+        // --- NOUVEAU JOYSTICK TACTILE ULTRA FLUIDE ---
+        const joyContainer = document.getElementById('joy-container');
+        const joyHandle = document.getElementById('joy-handle');
         let moveX = 0, moveY = 0;
-        const joyZone = document.getElementById('joy-zone');
-        const joyStick = document.getElementById('joy-stick');
-        let joyRect = joyZone.getBoundingClientRect();
+        let isDragging = false;
 
-        joyZone.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            let touch = e.touches[0];
-            let rx = touch.clientX - (joyRect.left + 50);
-            let ry = touch.clientY - (joyRect.top + 50);
-            let dist = Math.sqrt(rx*rx + ry*ry);
-            if(dist > 30) { rx = (rx/dist)*30; ry = (ry/dist)*30; }
-            joyStick.style.transform = `translate(${rx}px, ${ry}px)`;
-            moveX = rx / 30;
-            moveY = ry / 30;
-        });
+        function handleJoystick(clientX, clientY) {
+            const rect = joyContainer.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            let deltaX = clientX - centerX;
+            let deltaY = clientY - centerY;
+            let distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const maxRadius = rect.width / 2 - 10; // Limite de course du stick
 
-        joyZone.addEventListener('touchend', () => {
-            joyStick.style.transform = 'translate(0px, 0px)';
+            if (distance > maxRadius) {
+                deltaX = (deltaX / distance) * maxRadius;
+                deltaY = (deltaY / distance) * maxRadius;
+                distance = maxRadius;
+            }
+
+            joyHandle.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+            
+            // Calcul des vecteurs de déplacement (-1 à 1)
+            moveX = deltaX / maxRadius;
+            moveY = deltaY / maxRadius;
+        }
+
+        joyContainer.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            handleJoystick(e.touches[0].clientX, e.touches[0].clientY);
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            handleJoystick(e.touches[0].clientX, e.touches[0].clientY);
+        }, { passive: false });
+
+        window.addEventListener('touchend', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            joyHandle.style.transform = 'translate(0px, 0px)';
             moveX = 0; moveY = 0;
         });
 
-        // Version PC (ZQSDF / Flèches) pour tester facilement
+        // Controles Clavier PC de secours (ZQSDF / Flèches)
         window.addEventListener('keydown', (e) => {
             if(e.key === 'ArrowUp' || e.key === 'z') moveY = -1;
             if(e.key === 'ArrowDown' || e.key === 's') moveY = 1;
@@ -178,13 +220,13 @@
         });
         window.addEventListener('keyup', () => { moveX = 0; moveY = 0; });
 
-        // --- FONCTIONS DU JEU ---
+        // --- GAMEPLAY MÈCANIQUES ---
         function startSolo() {
             document.getElementById('menu').style.display = 'none';
             document.getElementById('game-container').style.display = 'flex';
             createMap();
             gameLoop();
-            setInterval(updateClock, 2000); // Le temps passe vite
+            setInterval(updateClock, 2500); 
         }
 
         function updateClock() {
@@ -196,107 +238,112 @@
             document.getElementById('clock').innerText = 
                 `${gameState.hour.toString().padStart(2,'0')}:${gameState.minutes.toString().padStart(2,'0')}`;
             
-            // Condition de Victoire : 6h du matin
-            if(gameState.hour === 6) {
-                endGame(true, "Tu as survécu jusqu'au matin ! Le bureau rouvre enfin.");
-            }
+            if(gameState.hour === 6) endGame(true, "06:00 - Le soleil se lève. Tu as survécu à tes heures supplémentaires !");
         }
 
         function triggerAction() {
-            // Check si proche d'un objet actif
             objects.forEach((obj, idx) => {
-                let dx = Math.abs((gameState.x + 12) - (obj.x + 15));
-                let dy = Math.abs((gameState.y + 12) - (obj.y + 15));
+                let dx = Math.abs((gameState.x + 11) - (obj.x + 15));
+                let dy = Math.abs((gameState.y + 11) - (obj.y + 15));
                 
-                if(dx < 40 && dy < 40) {
+                if(dx < 35 && dy < 35) {
                     if(obj.type === 'coffee-machine') {
-                        gameState.energy = Math.min(100, gameState.energy + 40);
-                        subtitle.innerText = "Ah, un bon café chaud ! Ça réveille.";
+                        gameState.energy = Math.min(100, gameState.energy + 35);
+                        subtitle.innerText = "Le café est brûlant mais ça me redonne un coup de fouet !";
                     }
                     else if(obj.type === 'door' && !gameState.monsterActive) {
                         gameState.monsterActive = true;
                         monsterElem.style.display = 'block';
-                        subtitle.innerText = "Mais c'est quoi cette pièce cachée... Oh non, QU'EST CE QUE C'EST QUE ÇA ? FUIT !";
+                        subtitle.innerText = "C'est quoi cette pièce ?... Oh mon dieu, QU'EST CE QUE C'EST QUE ÇA ?! CA ME FONCE DESSUS !!";
                     }
                     else if(obj.type === 'closet') {
                         gameState.hidden = !gameState.hidden;
                         if(gameState.hidden) {
-                            subtitle.innerText = "Caché dans l'armoire... Ne fais pas de bruit.";
-                            p1.style.opacity = "0.3";
+                            subtitle.innerText = "Tu es caché dans l'armoire. Ne bouge plus... Retiens ta respiration.";
+                            p1.style.filter = "brightness(0.3)";
                         } else {
-                            subtitle.innerText = "Je sors de ma cachette.";
-                            p1.style.opacity = "1";
+                            subtitle.innerText = "Je sors. Le couloir a l'air libre.";
+                            p1.style.filter = "none";
                         }
                     }
                     else if(obj.type === 'food') {
-                        gameState.hunger = Math.min(100, gameState.hunger + 35);
-                        subtitle.innerText = "Miam, de la nourriture ! Ça va m'aider à tenir.";
-                        document.getElementById(`obj-${idx}`).style.display = 'none'; // Consommé
-                        obj.x = -1000; // Désactive la collision
+                        gameState.hunger = Math.min(100, gameState.hunger + 40);
+                        subtitle.innerText = "Tu as trouvé des restes de donuts ! Ça va m'éviter de mourir de faim.";
+                        document.getElementById(`obj-${idx}`).style.display = 'none'; 
+                        obj.x = -9999; 
                     }
                 }
             });
         }
 
-        // Boucle principale
         function gameLoop() {
             if(gameState.gameOver) return;
 
-            // Déplacement joueur si non caché
+            // Déplacement fluide
             if(!gameState.hidden) {
-                gameState.x += moveX * 4;
-                gameState.y += moveY * 4;
+                gameState.x += moveX * 3.2;
+                gameState.y += moveY * 3.2;
                 
-                // Limites de l'écran
-                gameState.x = Math.max(0, Math.min(view.clientWidth - 24, gameState.x));
-                gameState.y = Math.max(0, Math.min(view.clientHeight - 24, gameState.y));
+                gameState.x = Math.max(5, Math.min(view.clientWidth - 28, gameState.x));
+                gameState.y = Math.max(5, Math.min(view.clientHeight - 28, gameState.y));
                 
                 p1.style.left = gameState.x + 'px';
                 p1.style.top = gameState.y + 'px';
             }
 
-            // Consommation vitale
-            gameState.energy = Math.max(0, gameState.energy - 0.05);
-            gameState.hunger = Math.max(0, gameState.hunger - 0.07);
+            // Calcul effet lampe torche dynamique centré sur le joueur
+            let percentX = ((gameState.x + 11) / view.clientWidth) * 100;
+            let percentY = ((gameState.y + 11) / view.clientHeight) * 100;
+            overlay.style.setProperty('--px', `${percentX}%`);
+            overlay.style.setProperty('--py', `${percentY}%`);
 
+            // Survie (Énergie & Faim chutent)
+            gameState.energy = Math.max(0, gameState.energy - 0.04);
+            gameState.hunger = Math.max(0, gameState.hunger - 0.05);
             document.getElementById('energy-bar').style.width = gameState.energy + '%';
             document.getElementById('hunger-bar').style.width = gameState.hunger + '%';
 
             if(gameState.energy <= 0 || gameState.hunger <= 0) {
-                endGame(false, "Tu es mort d'épuisement ou de faim...");
+                endGame(false, "Tu t'es évanoui de fatigue et de faim dans le noir...");
             }
 
-            // Comportement de l'I.A. du Monstre
+            // Intelligence Artificielle du Monstre
             if(gameState.monsterActive) {
                 let targetX = gameState.x;
-                let targetString = "le joueur";
+                let targetY = gameState.y;
                 
-                // En multi, le monstre peut cibler le joueur le plus proche non caché
                 if(gameState.hidden) {
-                    targetX = gameState.monsterX + (Math.random() - 0.5) * 50; // Erre sans but
+                    // Si caché, le monstre tourne autour de sa zone plutôt que de tricher
+                    targetX = gameState.monsterX + Math.sin(Date.now() / 300) * 8;
+                    targetY = gameState.monsterY + Math.cos(Date.now() / 300) * 8;
                 }
 
                 let mdx = targetX - gameState.monsterX;
-                let mdy = gameState.y - gameState.monsterY;
+                let mdy = targetY - gameState.monsterY;
                 let dist = Math.sqrt(mdx*mdx + mdy*mdy);
 
-                if(dist > 5) {
-                    gameState.monsterX += (mdx / dist) * 2.5; // Vitesse du monstre
-                    gameState.monsterY += (mdy / dist) * 2.5;
+                if(dist > 2) {
+                    gameState.monsterX += (mdx / dist) * 2.2; 
+                    gameState.monsterY += (mdy / dist) * 2.2;
                 }
 
                 monsterElem.style.left = gameState.monsterX + 'px';
                 monsterElem.style.top = gameState.monsterY + 'px';
 
-                // Collision monstre / joueur
-                if(dist < 25 && !gameState.hidden) {
-                    endGame(false, "Le monstre t'a attrapé dans les couloirs obscurs !");
+                // Condition de capture
+                if(dist < 22 && !gameState.hidden) {
+                    endGame(false, "Le monstre t'a attrapé ! Personne n'entendra tes cris dans ce bureau vide.");
                 }
             }
 
-            // Sync Réseau Multi (P2P)
+            // Synchronisation P2P WebRTC via PeerJS
             if(isMultiplayer && conn && conn.open) {
-                conn.send({x: gameState.x, y: gameState.y, hidden: gameState.hidden, monsterActive: gameState.monsterActive, mx: gameState.monsterX, my: gameState.monsterY});
+                conn.send({
+                    x: gameState.x, y: gameState.y, 
+                    hidden: gameState.hidden, 
+                    monsterActive: gameState.monsterActive, 
+                    mx: gameState.monsterX, my: gameState.monsterY
+                });
             }
 
             requestAnimationFrame(gameLoop);
@@ -306,26 +353,27 @@
             gameState.gameOver = true;
             document.getElementById('game-over').style.display = 'flex';
             document.getElementById('game-over-title').innerText = victory ? "VICTOIRE !" : "GAME OVER";
+            document.getElementById('game-over-title').style.color = victory ? "#00ffcc" : "#ff3b3b";
             document.getElementById('game-over-reason').innerText = reason;
         }
 
-        // --- GESTION MULTIJOUEUR EN P2P ---
+        // --- MULTIJOUEUR PEER-TO-PEER ---
         function initMultiplayer(host) {
             isHost = host;
             isMultiplayer = true;
-            peer = new Peer(); // Utilise les serveurs d'échange gratuits de PeerJS
+            document.getElementById('room-code-display').innerText = "Connexion au réseau P2P...";
+            peer = new Peer(); 
 
             peer.on('open', (id) => {
                 if(isHost) {
-                    document.getElementById('room-code-display').innerText = "Code de ton salon : " + id;
-                    // Attente d'un joueur
+                    document.getElementById('room-code-display').innerText = "CODE DU SALON : " + id;
                     peer.on('connection', (connection) => {
                         conn = connection;
                         setupMultiplayerEvents();
                     });
                 } else {
                     let connectId = document.getElementById('join-code').value;
-                    if(!connectId) return alert("Rentre le code de ton pote !");
+                    if(!connectId) return alert("Veuillez entrer le code de votre ami.");
                     conn = peer.connect(connectId);
                     setupMultiplayerEvents();
                 }
@@ -335,16 +383,14 @@
         function setupMultiplayerEvents() {
             conn.on('open', () => {
                 p2.style.display = 'block';
-                startSolo(); // Lance la partie une fois connecté
+                startSolo();
             });
 
             conn.on('data', (data) => {
-                // Réception des coordonnées du pote en P2P
                 p2.style.left = data.x + 'px';
                 p2.style.top = data.y + 'px';
-                p2.style.opacity = data.hidden ? "0.2" : "1";
+                p2.style.filter = data.hidden ? "brightness(0.2)" : "none";
                 
-                // Synchronisation du monstre si l'autre joueur l'a déclenché
                 if(data.monsterActive && !gameState.monsterActive) {
                     gameState.monsterActive = true;
                     monsterElem.style.display = 'block';
